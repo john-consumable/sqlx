@@ -534,6 +534,12 @@ macro_rules! query_file_unchecked (
 #[macro_export]
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 macro_rules! query_as (
+    ($var:expr, $out_struct:path, $query:expr) => ( {
+        $crate::sqlx_macros::expand_query!(env_var = $var, record = $out_struct, source = $query)
+    });
+    ($var:expr, $out_struct:path, $query:expr, $($args:tt)*) => ( {
+        $crate::sqlx_macros::expand_query!(env_var = $var, record = $out_struct, source = $query, args = [$($args)*])
+    });
     ($out_struct:path, $query:expr) => ( {
         $crate::sqlx_macros::expand_query!(record = $out_struct, source = $query)
     });

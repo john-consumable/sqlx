@@ -62,12 +62,17 @@ pub fn expand_input(input: QueryMacroInput) -> crate::Result<TokenStream> {
             .map_err(|e| format!("failed to load environment from {:?}, {}", env_path, e))?
     }
 
+    let db_var = input
+        .env_var
+        .as_ref()
+        .map_or_else(|| "DATABASE_URL".to_string(), |s| s.to_string());
+
     // if `dotenv` wasn't initialized by the above we make sure to do it here
     match (
         dotenv::var("SQLX_OFFLINE")
             .map(|s| s.eq_ignore_ascii_case("true") || s == "1")
             .unwrap_or(false),
-        dotenv::var("DATABASE_URL"),
+        dotenv::var(&db_var),
     ) {
         (false, Ok(db_url)) => expand_from_db(input, &db_url),
 
@@ -82,11 +87,12 @@ pub fn expand_input(input: QueryMacroInput) -> crate::Result<TokenStream> {
             } else if workspace_data_file_path.exists() {
                 expand_from_file(input, workspace_data_file_path)
             } else {
-                Err(
-                    "`DATABASE_URL` must be set, or `cargo sqlx prepare` must have been run \
-                     and sqlx-data.json must exist, to use query macros"
-                        .into(),
+                Err(format!(
+                    "`{}` must be set, or `cargo sqlx prepare` must have been run \
+                         and sqlx-data.json must exist, to use query macros",
+                    &db_var
                 )
+                .into())
             }
         }
 
@@ -96,7 +102,7 @@ pub fn expand_input(input: QueryMacroInput) -> crate::Result<TokenStream> {
         }
 
         #[cfg(not(feature = "offline"))]
-        (false, Err(_)) => Err("`DATABASE_URL` must be set to use query macros".into()),
+        (false, Err(_)) => Err(format!("`{}` must be set to use query macros", &db_var,).into()),
     }
 }
 

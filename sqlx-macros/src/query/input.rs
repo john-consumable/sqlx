@@ -8,6 +8,8 @@ use syn::{ExprArray, Type};
 
 /// Macro input shared by `query!()` and `query_file!()`
 pub struct QueryMacroInput {
+    pub(super) env_var: Option<String>,
+
     pub(super) src: String,
 
     #[cfg_attr(not(feature = "offline"), allow(dead_code))]
@@ -36,6 +38,7 @@ impl Parse for QueryMacroInput {
         let mut args: Option<Vec<Expr>> = None;
         let mut record_type = RecordType::Generated;
         let mut checked = true;
+        let mut env_var = None;
 
         let mut expect_comma = false;
 
@@ -48,7 +51,9 @@ impl Parse for QueryMacroInput {
 
             let _ = input.parse::<syn::token::Eq>()?;
 
-            if key == "source" {
+            if key == "env_var" {
+                env_var = Some(input.parse::<LitStr>()?.value());
+            } else if key == "source" {
                 let span = input.span();
                 let query_str = Punctuated::<LitStr, Token![+]>::parse_separated_nonempty(input)?
                     .iter()
@@ -80,6 +85,7 @@ impl Parse for QueryMacroInput {
         let arg_exprs = args.unwrap_or_default();
 
         Ok(QueryMacroInput {
+            env_var,
             src: src.resolve(src_span)?,
             src_span,
             record_type,
