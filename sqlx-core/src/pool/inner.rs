@@ -228,7 +228,7 @@ impl<DB: Database> SharedPool<DB> {
             }
 
             // an IO error while connecting is assumed to be the system starting up
-            Ok(Err(Error::Io(_))) => Ok(None),
+            Ok(Err(Error::Io(e))) => Err(Error::Io(e)),
 
             // TODO: Handle other database "boot period"s
 
