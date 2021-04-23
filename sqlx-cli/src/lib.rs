@@ -57,13 +57,13 @@ hint: This command only works in the manifest directory of a Cargo package."#
             check: false,
             merged,
             args,
-        } => prepare::run(&database_url, merged, args)?,
+        } => prepare::run(merged, args)?,
 
         Command::Prepare {
             check: true,
             merged,
             args,
-        } => prepare::check(&database_url, merged, args)?,
+        } => prepare::check(merged, args)?,
     };
 
     Ok(())

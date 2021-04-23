@@ -15,15 +15,7 @@ use std::{env, fs};
 type QueryData = BTreeMap<String, serde_json::Value>;
 type JsonObject = serde_json::Map<String, serde_json::Value>;
 
-pub fn run(url: &str, merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()> {
-    #[derive(serde::Serialize)]
-    struct DataFile {
-        db: &'static str,
-        #[serde(flatten)]
-        data: QueryData,
-    }
-
-    let db_kind = get_db_kind(url)?;
+pub fn run(merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()> {
     let data = run_prepare_step(merge, cargo_args)?;
 
     if data.is_empty() {
@@ -37,7 +29,7 @@ pub fn run(url: &str, merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()
         BufWriter::new(
             File::create("sqlx-data.json").context("failed to create/open `sqlx-data.json`")?,
         ),
-        &DataFile { db: db_kind, data },
+        &data,
     )
     .context("failed to write to `sqlx-data.json`")?;
 
@@ -49,8 +41,7 @@ pub fn run(url: &str, merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()
     Ok(())
 }
 
-pub fn check(url: &str, merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()> {
-    let db_kind = get_db_kind(url)?;
+pub fn check(merge: bool, cargo_args: Vec<String>) -> anyhow::Result<()> {
     let data = run_prepare_step(merge, cargo_args)?;
 
     let data_file = File::open("sqlx-data.json").context(
@@ -59,21 +50,22 @@ pub fn check(url: &str, merge: bool, cargo_args: Vec<String>) -> anyhow::Result<
 
     let mut saved_data: QueryData = serde_json::from_reader(BufReader::new(data_file))?;
 
-    let expected_db = saved_data
-        .remove("db")
-        .context("expected key `db` in data file")?;
+    // TODO(multiple database urls): Add these checks to the
+    // individual query data
+    // let expected_db = saved_data
+    // .remove("db") .context("expected key `db` in data file")?;
 
-    let expected_db = expected_db
-        .as_str()
-        .context("expected key `db` to be a string")?;
+    // let expected_db = expected_db
+    //     .as_str()
+    //     .context("expected key `db` to be a string")?;
 
-    if db_kind != expected_db {
-        bail!(
-            "saved prepare data is for {}, not {} (inferred from `DATABASE_URL`)",
-            expected_db,
-            db_kind
-        )
-    }
+    // if db_kind != expected_db {
+    //     bail!(
+    //         "saved prepare data is for {}, not {} (inferred from `DATABASE_URL`)",
+    //         expected_db,
+    //         db_kind
+    //     )
+    // }
 
     if data != saved_data {
         bail!("`cargo sqlx prepare` needs to be rerun")
@@ -181,19 +173,22 @@ fn run_prepare_step(merge: bool, cargo_args: Vec<String>) -> anyhow::Result<Quer
 
 fn get_db_kind(url: &str) -> anyhow::Result<&'static str> {
     let options = AnyConnectOptions::from_str(&url)?;
+    Ok(db_kind_to_str(&options.kind()))
+}
 
+fn db_kind_to_str(kind: &AnyKind) -> &'static str {
     // these should match the values of `DatabaseExt::NAME` in `sqlx-macros`
-    match options.kind() {
+    match kind {
         #[cfg(feature = "postgres")]
-        AnyKind::Postgres => Ok("PostgreSQL"),
+        AnyKind::Postgres => "PostgreSQL",
 
         #[cfg(feature = "mysql")]
-        AnyKind::MySql => Ok("MySQL"),
+        AnyKind::MySql => "MySQL",
 
         #[cfg(feature = "sqlite")]
-        AnyKind::Sqlite => Ok("SQLite"),
+        AnyKind::Sqlite => "SQLite",
 
         #[cfg(feature = "mssql")]
-        AnyKind::Mssql => Ok("MSSQL"),
+        AnyKind::Mssql => "MSSQL",
     }
 }
