@@ -1,3 +1,4 @@
+use crate::database::DatabaseExt;
 use sqlx_core::database::Database;
 use sqlx_core::describe::Describe;
 use sqlx_core::executor::Executor;
@@ -13,18 +14,20 @@ use sqlx_core::executor::Executor;
 #[derive(Debug)]
 pub struct QueryData<DB: Database> {
     #[allow(dead_code)]
+    pub(super) db_type: &'static str,
     pub(super) query: String,
     pub(super) describe: Describe<DB>,
     #[cfg(feature = "offline")]
     pub(super) hash: String,
 }
 
-impl<DB: Database> QueryData<DB> {
+impl<DB: DatabaseExt> QueryData<DB> {
     pub async fn from_db(
         conn: impl Executor<'_, Database = DB>,
         query: &str,
     ) -> crate::Result<Self> {
         Ok(QueryData {
+            db_type: DB::NAME,
             query: query.into(),
             describe: conn.describe(query).await?,
             #[cfg(feature = "offline")]
@@ -85,6 +88,7 @@ pub mod offline {
             if DB::NAME == dyn_data.db_name {
                 let describe: Describe<DB> = serde_json::from_value(dyn_data.describe)?;
                 Ok(QueryData {
+                    db_type: DB::NAME,
                     query: dyn_data.query,
                     describe,
                     hash: dyn_data.hash,
