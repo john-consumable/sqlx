@@ -14,7 +14,7 @@ use sqlx_core::executor::Executor;
 #[derive(Debug)]
 pub struct QueryData<DB: Database> {
     #[allow(dead_code)]
-    pub(super) db_type: &'static str,
+    pub(super) db_name: &'static str,
     pub(super) query: String,
     pub(super) describe: Describe<DB>,
     #[cfg(feature = "offline")]
@@ -27,7 +27,7 @@ impl<DB: DatabaseExt> QueryData<DB> {
         query: &str,
     ) -> crate::Result<Self> {
         Ok(QueryData {
-            db_type: DB::NAME,
+            db_name: DB::NAME,
             query: query.into(),
             describe: conn.describe(query).await?,
             #[cfg(feature = "offline")]
@@ -52,7 +52,6 @@ pub mod offline {
 
     #[derive(serde::Deserialize)]
     pub struct DynQueryData {
-        #[serde(skip)]
         pub db_name: String,
         pub query: String,
         pub describe: serde_json::Value,
@@ -82,13 +81,12 @@ pub mod offline {
         Describe<DB>: serde::Serialize + serde::de::DeserializeOwned,
     {
         pub fn from_dyn_data(dyn_data: DynQueryData) -> crate::Result<Self> {
-            assert!(!dyn_data.db_name.is_empty());
             assert!(!dyn_data.hash.is_empty());
 
             if DB::NAME == dyn_data.db_name {
                 let describe: Describe<DB> = serde_json::from_value(dyn_data.describe)?;
                 Ok(QueryData {
-                    db_type: DB::NAME,
+                    db_name: DB::NAME,
                     query: dyn_data.query,
                     describe,
                     hash: dyn_data.hash,
@@ -146,8 +144,6 @@ pub mod offline {
         where
             A: MapAccess<'de>,
         {
-            let mut db_name: Option<String> = None;
-
             let query_data = loop {
                 // unfortunately we can't avoid this copy because deserializing from `io::Read`
                 // doesn't support deserializing borrowed values
@@ -159,17 +155,10 @@ pub mod offline {
                 })?;
 
                 // lazily deserialize the query data only
-                if key == "db" {
-                    db_name = Some(map.next_value::<String>()?);
-                } else if key == self.hash {
-                    let db_name = db_name.ok_or_else(|| {
-                        serde::de::Error::custom("expected \"db\" key before query hash keys")
-                    })?;
-
+                if key == self.hash {
                     let mut query_data: DynQueryData = map.next_value()?;
 
                     if query_data.query == self.query {
-                        query_data.db_name = db_name;
                         query_data.hash = self.hash.clone();
                         break query_data;
                     } else {
